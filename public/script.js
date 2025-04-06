@@ -1,126 +1,166 @@
 const socket = io();
-const roomId =
-  prompt("Enter room ID to join or leave blank to auto-generate:") ||
-  Math.random().toString(36).substring(2, 10);
-alert(`Your Room ID: ${roomId} — open this room in another tab/device to connect.`);
-
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
-const joinBtn = document.getElementById("joinBtn");
-const muteBtn = document.getElementById("muteBtn");
-const videoBtn = document.getElementById("videoBtn");
-const leaveBtn = document.getElementById("leaveBtn");
-
+const videoGrid = document.getElementById("video-grid");
+const peers = {};
 let localStream;
-let remoteStream;
-let peerConnection;
+let roomId;
+let userName;
+let isAudioMuted = false;
+let isVideoMuted = false;
 
-const servers = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
+while (!roomId || !userName) {
+  roomId = prompt("Enter Room ID:");
+  userName = prompt("Enter Your Name:");
+}
 
-// Get Media
-async function getMedia() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Your browser does not support camera or microphone access.");
-    return;
+const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+  localStream = stream;
+  addVideoStream(stream, true, `${userName} (You)`);
+  socket.emit("join-room", { roomId, userName });
+});
+
+// Handle joining
+socket.on("room-full", () => {
+  alert("Room is full. Try another.");
+  location.reload();
+});
+
+socket.on("all-users", (users) => {
+  users.forEach(({ id, name }) => {
+    const pc = createPeerConnection(id, name);
+    peers[id] = pc;
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+    pc.createOffer().then((offer) => {
+      pc.setLocalDescription(offer);
+      socket.emit("offer", { offer, to: id, name: userName });
+    });
+  });
+});
+
+socket.on("offer", ({ from, offer, name }) => {
+  const pc = createPeerConnection(from, name);
+  peers[from] = pc;
+  localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  pc.setRemoteDescription(new RTCSessionDescription(offer))
+    .then(() => pc.createAnswer())
+    .then((answer) => {
+      pc.setLocalDescription(answer);
+      socket.emit("answer", { answer, to: from });
+    });
+});
+
+socket.on("answer", ({ from, answer }) => {
+  const pc = peers[from];
+  if (pc) pc.setRemoteDescription(new RTCSessionDescription(answer));
+});
+
+socket.on("ice-candidate", ({ from, candidate }) => {
+  const pc = peers[from];
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
   }
+});
 
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = localStream;
-  } catch (err) {
-    alert("Media error: " + err.message);
-    console.error("getUserMedia error:", err);
+socket.on("user-disconnected", (userId) => {
+  const container = document.getElementById(`user-${userId}`);
+  if (container) container.remove();
+  if (peers[userId]) {
+    peers[userId].close();
+    delete peers[userId];
+  }
+});
+
+function createPeerConnection(peerId, name) {
+  const pc = new RTCPeerConnection(config);
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit("ice-candidate", { to: peerId, candidate: event.candidate });
+    }
+  };
+
+  pc.ontrack = (event) => {
+    const stream = event.streams[0];
+    const container = document.getElementById(`user-${peerId}`);
+    if (!container) {
+      addVideoStream(stream, false, name, peerId);
+    } else {
+      stream
+        .getTracks()
+        .forEach((track) => container.querySelector("video").srcObject.addTrack(track));
+    }
+  };
+
+  return pc;
+}
+
+function addVideoStream(stream, isLocal, name, userId = "local") {
+  const container = document.createElement("div");
+  container.id = `user-${userId}`;
+  container.className = "flex flex-col items-center";
+
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = isLocal;
+  video.classList.add("video-box");
+
+  const label = document.createElement("div");
+  label.className = "text-center mt-2 text-sm text-white";
+  label.innerText = name || "Unknown";
+
+  container.appendChild(video);
+  container.appendChild(label);
+  videoGrid.appendChild(container);
+
+  monitorSpeaking(video, stream);
+}
+function toggleAudio() {
+  isAudioMuted = !isAudioMuted;
+  const label = document.getElementById("audioLabel");
+  label.textContent = isAudioMuted ? "Unmute" : "Mute";
+
+  // Your logic to mute/unmute stream here
+  if (localStream) {
+    localStream.getAudioTracks().forEach((track) => (track.enabled = !isAudioMuted));
   }
 }
 
-joinBtn.onclick = async () => {
-  await getMedia();
+function toggleVideo() {
+  isVideoMuted = !isVideoMuted;
+  const label = document.getElementById("videoLabel");
+  label.textContent = isVideoMuted ? "Video On" : "Video Off";
 
-  peerConnection = new RTCPeerConnection(servers);
-  remoteStream = new MediaStream();
-  remoteVideo.srcObject = remoteStream;
+  // Your logic to enable/disable video stream here
+  if (localStream) {
+    localStream.getVideoTracks().forEach((track) => (track.enabled = !isVideoMuted));
+  }
+}
 
-  // Send local tracks
-  localStream.getTracks().forEach((track) => {
-    peerConnection.addTrack(track, localStream);
-  });
-
-  // Receive remote tracks
-  peerConnection.ontrack = (event) => {
-    event.streams[0].getTracks().forEach((track) => {
-      remoteStream.addTrack(track);
-    });
-  };
-
-  // Send ICE candidates
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit("ice-candidate", { room: roomId, candidate: event.candidate });
-    }
-  };
-
-  socket.emit("join", roomId);
-
-  // You are the second user (receive offer)
-  socket.on("offer", async ({ offer }) => {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    socket.emit("answer", { room: roomId, answer });
-  });
-
-  // You are the first user (send offer)
-  socket.on("user-connected", async () => {
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-    socket.emit("offer", { room: roomId, offer });
-  });
-
-  // Receive answer
-  socket.on("answer", async ({ answer }) => {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-  });
-
-  // ICE
-  socket.on("ice-candidate", async ({ candidate }) => {
-    try {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (e) {
-      console.error("Error adding received ice candidate", e);
-    }
-  });
-
-  // Handle disconnection
-  socket.on("user-disconnected", () => {
-    if (remoteStream) {
-      remoteStream.getTracks().forEach((track) => track.stop());
-      remoteVideo.srcObject = null;
-    }
-  });
-};
-
-muteBtn.onclick = () => {
-  localStream.getAudioTracks().forEach((track) => {
-    track.enabled = !track.enabled;
-    muteBtn.textContent = track.enabled ? "Mute" : "Unmute";
-  });
-};
-
-videoBtn.onclick = () => {
-  localStream.getVideoTracks().forEach((track) => {
-    track.enabled = !track.enabled;
-    videoBtn.textContent = track.enabled ? "Disable Video" : "Enable Video";
-  });
-};
-
-leaveBtn.onclick = () => {
-  peerConnection.close();
+function leaveCall() {
+  Object.values(peers).forEach((pc) => pc.close());
+  if (localStream) localStream.getTracks().forEach((track) => track.stop());
   socket.disconnect();
+  alert("You have left the call.");
   location.reload();
-};
+}
 
-window.addEventListener("load", () => {
-  getMedia();
-});
+function monitorSpeaking(video, stream) {
+  const audioContext = new AudioContext();
+  const analyser = audioContext.createAnalyser();
+  const mic = audioContext.createMediaStreamSource(stream);
+  mic.connect(analyser);
+  analyser.fftSize = 512;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+
+  function check() {
+    analyser.getByteFrequencyData(data);
+    const volume = data.reduce((a, b) => a + b, 0) / data.length;
+    video.classList.toggle("speaking", volume > 25);
+    requestAnimationFrame(check);
+  }
+
+  check();
+}

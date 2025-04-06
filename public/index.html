@@ -1,27 +1,89 @@
 <!DOCTYPE html>
-<html lang="en" class="bg-gray-900 text-white">
+<html lang="en" class="bg-[#121212] text-white">
 
 <head>
     <meta charset="UTF-8" />
-    <title>Video Call App</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <script defer src="script.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NodeMeet</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="flex flex-col items-center justify-center h-screen">
-    <h1 class="text-2xl font-bold mb-4">Video Call App</h1>
-    <div class="space-x-2">
-        <button id="joinBtn" class="bg-blue-600 px-4 py-2 rounded">Join</button>
-        <button id="muteBtn" class="bg-yellow-500 px-4 py-2 rounded">Mute</button>
-        <button id="videoBtn" class="bg-purple-500 px-4 py-2 rounded">Disable Video</button>
-        <button id="leaveBtn" class="bg-red-600 px-4 py-2 rounded">Leave</button>
-    </div>
-    <div class="mt-6 flex gap-4">
-        <video id="localVideo" autoplay muted playsinline></video>
-        <video id="remoteVideo" autoplay playsinline></video>
+<style>
+    .btn-control {
+        @apply flex items-center bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-full shadow transition;
+    }
 
+    .btn-leave {
+        @apply flex items-center bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-full shadow transition;
+    }
+
+    .video-box {
+        @apply rounded-lg border-4 border-transparent aspect-video object-cover;
+        background-color: black;
+    }
+
+    .speaking {
+        border-color: #00e676;
+        box-shadow: 0 0 10px #00e676;
+    }
+</style>
+
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Optional heading at top -->
+    <header class="text-center py-4 text-2xl font-semibold text-white bg-[#1a1a1a] shadow">
+        NodeMeet
+    </header>
+
+    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 overflow-y-auto flex-1"></div>
+
+    <div class="bg-[#1f1f1f] p-4 flex justify-center gap-3">
+        <!-- Audio Toggle -->
+        <button onclick="toggleAudio()" class="btn-control flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="#ffffff" stroke-width="2" viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2c0 3.866-3.134 7-7 7s-7-3.134-7-7v-2" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19v3" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 22h8" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5a3 3 0 116 0v7a3 3 0 11-6 0V5z" />
+            </svg>
+            <span id="audioLabel">Mute</span>
+        </button>
+
+        <!-- Video Toggle -->
+        <button onclick="toggleVideo()" class="btn-control flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Toggle Video</title>
+                <path d="M15 10l4.5-2.5v9L15 14v2a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h8a2 2 0 012 2v2z" />
+            </svg>
+            <span id="videoLabel">Video Off</span>
+        </button>
+
+        <!-- Leave Call -->
+        <button onclick="leaveCall()" class="btn-leave flex items-center text-red-500 hover:text-red-600">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                <title>Leave Call</title>
+                <path d="M16 17l5-5-5-5" />
+                <path d="M3 12h18" />
+            </svg>
+            Leave
+        </button>
     </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+
+    <footer class="text-center text-sm text-gray-400 py-2 bg-[#1a1a1a]">
+        Developed by
+        <a href="https://www.linkedin.com/in/mohit-gohil/" target="_blank" class="text-blue-400 hover:underline">
+            Mohit Gohil
+        </a>
+    </footer>
+
 </body>
 
 </html>
