@@ -7,18 +7,15 @@ let userName;
 let isAudioMuted = false;
 let isVideoMuted = false;
 
-while (!roomId || !userName) {
-  roomId = prompt("Enter Room ID:");
-  userName = prompt("Enter Your Name:");
-}
-
 const config = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-  localStream = stream;
-  addVideoStream(stream, true, `${userName} (You)`);
-  socket.emit("join-room", { roomId, userName });
-});
+function initSocket(roomId, userName) {
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+    localStream = stream;
+    addVideoStream(stream, true, `${userName} (You)`);
+    socket.emit("join-room", { roomId, userName });
+  });
+}
 
 // Handle joining
 socket.on("room-full", () => {
@@ -71,6 +68,29 @@ socket.on("user-disconnected", (userId) => {
   }
 });
 
+socket.on("update-status", ({ socketId, audio, video }) => {
+  const micIcon = document.getElementById(`mic-${socketId}`);
+  const camIcon = document.getElementById(`cam-${socketId}`);
+  if (micIcon) micIcon.textContent = audio ? "Audio On" : "Audio Off";
+  if (camIcon) camIcon.textContent = video ? "Video On" : "Video Off";
+});
+
+function startCallPrompt() {
+  const roomId = prompt("Enter Room ID:");
+  if (!roomId) return;
+
+  const userName = prompt("Enter your name:");
+  if (!userName) return;
+
+  // Hide start screen and show the main call UI
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("video-grid").classList.remove("hidden");
+  document.getElementById("controls").classList.remove("hidden");
+
+  // Call your existing join logic
+  initSocket(roomId, userName);
+}
+
 function createPeerConnection(peerId, name) {
   const pc = new RTCPeerConnection(config);
 
@@ -98,7 +118,7 @@ function createPeerConnection(peerId, name) {
 function addVideoStream(stream, isLocal, name, userId = "local") {
   const container = document.createElement("div");
   container.id = `user-${userId}`;
-  container.className = "flex flex-col items-center";
+  container.className = "relative flex flex-col items-center";
 
   const video = document.createElement("video");
   video.srcObject = stream;
@@ -111,21 +131,43 @@ function addVideoStream(stream, isLocal, name, userId = "local") {
   label.className = "text-center mt-2 text-sm text-white";
   label.innerText = name || "Unknown";
 
+  const status = document.createElement("div");
+  status.className =
+    "absolute bottom-2 left-2 flex gap-2 items-center bg-black/60 px-2 py-1 rounded text-xs text-white";
+  status.id = `status-${userId}`;
+
+  const micStatus = document.createElement("span");
+  micStatus.id = `mic-${userId}`;
+  micStatus.innerText = "Audio On";
+
+  const camStatus = document.createElement("span");
+  camStatus.id = `cam-${userId}`;
+  camStatus.innerText = "Video On";
+
+  status.appendChild(micStatus);
+  status.appendChild(camStatus);
+
   container.appendChild(video);
+  container.appendChild(status);
   container.appendChild(label);
   videoGrid.appendChild(container);
 
   monitorSpeaking(video, stream);
 }
+
 function toggleAudio() {
   isAudioMuted = !isAudioMuted;
   const label = document.getElementById("audioLabel");
   label.textContent = isAudioMuted ? "Unmute" : "Mute";
 
-  // Your logic to mute/unmute stream here
   if (localStream) {
     localStream.getAudioTracks().forEach((track) => (track.enabled = !isAudioMuted));
   }
+
+  socket.emit("update-status", {
+    audio: !isAudioMuted,
+    video: !isVideoMuted,
+  });
 }
 
 function toggleVideo() {
@@ -133,10 +175,14 @@ function toggleVideo() {
   const label = document.getElementById("videoLabel");
   label.textContent = isVideoMuted ? "Video On" : "Video Off";
 
-  // Your logic to enable/disable video stream here
   if (localStream) {
     localStream.getVideoTracks().forEach((track) => (track.enabled = !isVideoMuted));
   }
+
+  socket.emit("update-status", {
+    audio: !isAudioMuted,
+    video: !isVideoMuted,
+  });
 }
 
 function leaveCall() {

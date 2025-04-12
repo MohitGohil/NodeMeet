@@ -4,8 +4,19 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="NodeMeet – Video chat and conference using WebRTC, Socket.IO & Node.js" />
+    <meta name="theme-color" content="#121212" />
     <title>NodeMeet</title>
+
+    <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
 </head>
 
 <style>
@@ -27,52 +38,113 @@
         box-shadow: 0 0 10px #00e676;
     }
 </style>
+<style>
+    .video-container {
+        position: relative;
+        width: 320px;
+        max-width: 100%;
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        border-radius: 0.5rem;
+        background-color: #000;
+    }
+
+    .video-box {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 0.5rem;
+    }
+
+    .user-label {
+        position: absolute;
+        bottom: 0.5rem;
+        left: 0.5rem;
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        border-radius: 0.25rem;
+        z-index: 10;
+    }
+
+    .speaking {
+        border: 2px solid lime;
+    }
+
+    @media screen and (max-width: 768px) {
+        .video-container {
+            width: 100%;
+        }
+    }
+</style>
 
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
-<body class="flex flex-col h-screen overflow-hidden">
+<body class="flex flex-col min-h-screen bg-[#121212] text-white">
+    <main class="flex-1 flex flex-col overflow-hidden">
 
-    <!-- Optional heading at top -->
-    <header class="text-center py-4 text-2xl font-semibold text-white bg-[#1a1a1a] shadow">
-        NodeMeet
-    </header>
+        <!-- Optional heading at top -->
+        <header
+            class="flex items-center justify-center gap-3 py-4 text-2xl font-semibold text-white bg-[#1a1a1a] shadow">
+            <img src="/logo.png" alt="NodeMeet Logo" class="w-8 h-8" />
+            NodeMeet
+        </header>
 
-    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 overflow-y-auto flex-1"></div>
 
-    <div class="bg-[#1f1f1f] p-4 flex justify-center gap-3">
-        <!-- Audio Toggle -->
-        <button onclick="toggleAudio()" class="btn-control flex items-center">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="#ffffff" stroke-width="2" viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2c0 3.866-3.134 7-7 7s-7-3.134-7-7v-2" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19v3" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8 22h8" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5a3 3 0 116 0v7a3 3 0 11-6 0V5z" />
-            </svg>
-            <span id="audioLabel">Mute</span>
-        </button>
+        <div id="start-screen" class="flex flex-col items-center justify-center flex-1 text-center p-4">
+            <h2 class="text-3xl font-bold mb-4">Welcome to NodeMeet</h2>
+            <p class="mb-6 text-gray-400">Start a new meeting or join an existing room</p>
+            <button onclick="startCallPrompt()"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow">
+                Start
+            </button>
+        </div>
 
-        <!-- Video Toggle -->
-        <button onclick="toggleVideo()" class="btn-control flex items-center">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-                <title>Toggle Video</title>
-                <path d="M15 10l4.5-2.5v9L15 14v2a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h8a2 2 0 012 2v2z" />
-            </svg>
-            <span id="videoLabel">Video Off</span>
-        </button>
+        <div id="video-grid"
+            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 overflow-y-auto flex-1 hidden">
+        </div>
 
-        <!-- Leave Call -->
-        <button onclick="leaveCall()" class="btn-leave flex items-center text-red-500 hover:text-red-600">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-                <title>Leave Call</title>
-                <path d="M16 17l5-5-5-5" />
-                <path d="M3 12h18" />
-            </svg>
-            Leave
-        </button>
-    </div>
+
+        <div id="controls" class="bg-[#1f1f1f] p-4 flex justify-center gap-3 hidden">
+
+            <div class="bg-[#1f1f1f] p-4 flex justify-center gap-3">
+                <!-- Audio Toggle -->
+                <button onclick="toggleAudio()" class="btn-control flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="#ffffff" stroke-width="2" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M19 10v2c0 3.866-3.134 7-7 7s-7-3.134-7-7v-2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19v3" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 22h8" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5a3 3 0 116 0v7a3 3 0 11-6 0V5z" />
+                    </svg>
+                    <span id="audioLabel">Mute</span>
+                </button>
+
+                <!-- Video Toggle -->
+                <button onclick="toggleVideo()" class="btn-control flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                        <title>Toggle Video</title>
+                        <path d="M15 10l4.5-2.5v9L15 14v2a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h8a2 2 0 012 2v2z" />
+                    </svg>
+                    <span id="videoLabel">Video Off</span>
+                </button>
+
+                <!-- Leave Call -->
+                <button onclick="leaveCall()" class="btn-leave flex items-center text-red-500 hover:text-red-600">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                        <title>Leave Call</title>
+                        <path d="M16 17l5-5-5-5" />
+                        <path d="M3 12h18" />
+                    </svg>
+                    Leave
+                </button>
+            </div>
+        </div>
+    </main>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
