@@ -126,6 +126,9 @@ function addVideoStream(stream, isLocal, name, userId = "local") {
   video.playsInline = true;
   video.muted = isLocal;
   video.classList.add("video-box");
+  if (isLocal) {
+    video.classList.add("mirror"); // Mirror only local stream
+  }
 
   const label = document.createElement("div");
   label.className = "text-center mt-2 text-sm text-white";
